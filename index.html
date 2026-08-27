@@ -6,6 +6,7 @@
   <title>ระบบทดสอบออนไลน์ทางพลศึกษา/วิทยาศาสตร์การกีฬา</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body {
@@ -25,7 +26,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
       <div class="flex items-center space-x-3">
         <span class="text-2xl font-bold tracking-wider">PE-EXAM</span>
-        <span class="text-xs bg-indigo-700 px-2 py-1 rounded text-indigo-200">TNSU Testing v1 By Dr.pkkp TNSUMK</span>
+        <span class="text-xs bg-indigo-700 px-2 py-1 rounded text-indigo-200">TNSU Testing System v1.1 By Dr.pkkp TNSUMK</span>
       </div>
       <div id="navUser" class="hidden flex items-center space-x-4">
         <span id="userNameDisplay" class="font-medium text-sm"></span>
@@ -110,7 +111,32 @@
 
     <!-- VIEW: ADMIN DASHBOARD -->
     <section id="viewAdmin" class="hidden space-y-6">
-      <h2 class="text-2xl font-bold text-indigo-950">แผงควบคุมผู้ดูแลระบบ (Admin Dashboard)</h2>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+        <h2 class="text-2xl font-bold text-indigo-950">แผงควบคุมผู้ดูแลระบบ (Admin Dashboard)</h2>
+        <!-- ปุ่มรีเฟรชข้อมูลหน้า Admin -->
+        <button onclick="refreshAdminDashboard()" id="btnRefreshAdmin" class="inline-flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-4 py-2 rounded-xl text-xs transition border border-indigo-200 shadow-sm">
+          <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> รีเฟรชข้อมูล
+        </button>
+      </div>
+
+      <!-- การ์ดแสดงชุดข้อสอบที่กำลังเปิดใช้งานในปัจจุบัน -->
+      <div class="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white p-5 rounded-xl shadow-md space-y-3">
+        <div class="flex items-center justify-between border-b border-indigo-700/60 pb-2">
+          <span class="text-xs font-bold text-yellow-300 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-circle-check text-emerald-400"></i> ชุดข้อสอบที่กำลังเปิดใช้งาน (Active Configuration)
+          </span>
+          <span id="adminActiveNumQ" class="text-xs bg-indigo-700 px-2.5 py-1 rounded-full border border-indigo-500 font-medium">กำลังโหลด...</span>
+        </div>
+        <div>
+          <h3 id="adminActiveTitle" class="text-lg font-bold text-white">กำลังโหลดชุดข้อสอบ...</h3>
+          <div class="mt-2 text-xs text-indigo-200">
+            <span class="font-semibold text-indigo-100">หัวข้อสอบที่เลือก:</span>
+            <ul id="adminActiveCatList" class="flex flex-wrap gap-1.5 mt-1.5">
+              <li class="bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-700/50">กำลังโหลดหัวข้อ...</li>
+            </ul>
+          </div>
+        </div>
+      </div>
 
       <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
         <h3 class="text-lg font-bold text-indigo-900 border-b pb-2">1. จัดชุดข้อสอบสำหรับนักศึกษา</h3>
@@ -242,7 +268,7 @@
   </main>
 
   <script>
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbw-WwVdqi6u46KBs1_rUktuNRiVBVU6j7iLYYD_XopS8P0i_xVUtwIeJP6n_mG_c-Z1/exec'; 
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbx8wBQZ0N4kI25sm1cPCfXaXdAv6biQ6v2NghbICk4eXrsy6N3dTs2At8DEfbBF2zY/exec'; 
 
     let currentUser = null;
     let activeConfig = null;
@@ -533,10 +559,49 @@
     }
 
     // --- ADMIN FLOW ---
+    async function refreshAdminDashboard() {
+      const btn = document.getElementById('btnRefreshAdmin');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-indigo-600"></i> กำลังอัปเดต...`;
+      }
+      
+      await loadAdminDashboard();
+      
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-arrows-rotate text-indigo-600"></i> รีเฟรชข้อมูล`;
+      }
+    }
+
     async function loadAdminDashboard() {
       document.getElementById('viewAdmin').classList.remove('hidden');
-      const res = await apiCall('getAdminData');
       
+      // ดึงข้อมูล Active Config แสดงในการ์ดบนสุด
+      const configRes = await apiCall('getActiveConfig');
+      if (configRes.success && configRes.config) {
+        const cfg = configRes.config;
+        document.getElementById('adminActiveTitle').innerText = cfg.exam_title || 'แบบทดสอบออนไลน์';
+        document.getElementById('adminActiveNumQ').innerText = `จำนวน ${cfg.num_questions} ข้อ`;
+        
+        const catListElem = document.getElementById('adminActiveCatList');
+        if (cfg.category_names && cfg.category_names.length > 0) {
+          catListElem.innerHTML = cfg.category_names.map(name => `
+            <li class="bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-700/50 text-indigo-100 font-medium flex items-center gap-1">
+              <i class="fa-solid fa-tag text-[10px] text-yellow-400"></i> ${name}
+            </li>
+          `).join('');
+        } else {
+          catListElem.innerHTML = `<li class="text-indigo-300">ไม่ระบุหมวดหมู่</li>`;
+        }
+      } else {
+        document.getElementById('adminActiveTitle').innerText = 'ยังไม่มีชุดข้อสอบที่เปิดใช้งาน';
+        document.getElementById('adminActiveNumQ').innerText = '0 ข้อ';
+        document.getElementById('adminActiveCatList').innerHTML = `<li class="text-indigo-300">กรุณาจัดชุดข้อสอบด้านล่าง</li>`;
+      }
+
+      // ดึงข้อมูล Admin Dashboard ภาพรวม
+      const res = await apiCall('getAdminData');
       if (res.success) {
         const catBox = document.getElementById('adminCategoryCheckboxes');
         catBox.innerHTML = res.categories.map(c => `
@@ -552,17 +617,42 @@
         document.getElementById('statPassRate').innerText = `${res.summary.passRate}%`;
 
         const logTable = document.getElementById('adminLogsTable');
-        logTable.innerHTML = res.studentLogs.map(l => `
-          <tr class="border-b hover:bg-slate-50">
-            <td class="p-3">${l.submitted_at}</td>
-            <td class="p-3 font-medium">${l.fullname}</td>
-            <td class="p-3">${l.score}</td>
-            <td class="p-3">${l.percentage}%</td>
-            <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${l.pass_status === 'Pass' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${l.pass_status}</span></td>
-            <td class="p-3">${l.switch_tab_count > 0 ? `<span class="text-amber-600 font-bold">${l.switch_tab_count} ครั้ง</span>` : '0'}</td>
-            <td class="p-3"><button onclick="viewStudentDetail('${l.user_id}', '${l.fullname}')" class="text-indigo-600 hover:underline text-xs font-semibold">ดูวิเคราะห์จุดอ่อน</button></td>
-          </tr>
-        `).join('');
+        logTable.innerHTML = res.studentLogs.map((l, index) => {
+          const isPass = String(l.pass_status).toUpperCase() === 'PASS';
+          
+          const statusBadge = isPass 
+            ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                 <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500"></span>Pass
+               </span>`
+            : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+                 <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-rose-500"></span>Fail
+               </span>`;
+
+          const switchWarning = Number(l.switch_tab_count) > 0 
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                 <i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i>${l.switch_tab_count} ครั้ง
+               </span>`
+            : `<span class="text-slate-400">0</span>`;
+
+          const rowBg = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+
+          return `
+            <tr class="${rowBg} border-b border-slate-100 hover:bg-indigo-50/40 transition-colors">
+              <td class="p-3 text-slate-500 whitespace-nowrap">${l.submitted_at}</td>
+              <td class="p-3 font-semibold text-slate-800">${l.fullname}</td>
+              <td class="p-3 font-medium text-slate-700">${l.score}</td>
+              <td class="p-3 font-bold text-indigo-600">${l.percentage}%</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3 text-center">${switchWarning}</td>
+              <td class="p-3">
+                <button onclick="viewStudentDetail('${l.user_id}', '${l.fullname}')" 
+                        class="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition">
+                  <i class="fa-solid fa-chart-pie"></i> ดูวิเคราะห์จุดอ่อน
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
 
         const userTable = document.getElementById('adminUserTable');
         userTable.innerHTML = res.users.map(u => `
@@ -599,6 +689,7 @@
 
       if (res.success) {
         alert('บันทึกและเปิดใช้งานชุดข้อสอบเรียบร้อยแล้ว');
+        loadAdminDashboard();
       }
     }
 
