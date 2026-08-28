@@ -513,7 +513,9 @@
       }
 
       if (res.success) {
-        alert(`ทำแบบทดสอบเสร็จสิ้น!\nคะแนนที่ได้: ${res.result.score} / ${res.result.total_score} (${res.result.percentage}%)\nผลการสอบ: ${res.result.pass_status}`);
+        const resultPercentage = getPercentage(res.result.percentage);
+        const resultStatus = resultPercentage >= PASS_PERCENTAGE ? 'PASS' : 'FAIL';
+        alert(`ทำแบบทดสอบเสร็จสิ้น!\nคะแนนที่ได้: ${res.result.score} / ${res.result.total_score} (${resultPercentage}%)\nผลการสอบ: ${resultStatus}`);
         document.getElementById('viewExam').classList.add('hidden');
         currentExam = [];
         
@@ -557,6 +559,20 @@
     }
 
     // --- ADMIN FLOW ---
+    // เกณฑ์ผ่านของระบบ: 60% (ปรับเป็นค่าเกณฑ์จริงของรายวิชาได้ที่นี่)
+    const PASS_PERCENTAGE = 60;
+
+    function getPercentage(value) {
+      const n = Number(String(value ?? '').replace('%', '').trim());
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    // ใช้คะแนนจริงเป็นตัวตัดสินผลสอบ เพื่อป้องกัน pass_status จาก Backend
+    // ที่อาจเป็น "PASS/Pass/ผ่าน" หรือถูกบันทึกผิด ทำให้ 10/10 และ 57/60 แสดง Fail
+    function getPassStatus(log) {
+      return getPercentage(log.percentage) >= PASS_PERCENTAGE ? 'PASS' : 'FAIL';
+    }
+
     async function refreshAdminDashboard() {
       const btn = document.getElementById('btnRefreshAdmin');
       if (btn) {
@@ -610,12 +626,20 @@
         document.getElementById('statTotalStudents').innerText = `${res.summary.totalStudents} คน`;
         document.getElementById('statTotalExams').innerText = `${res.summary.totalExamsTaken} ครั้ง`;
         document.getElementById('statAvgScore').innerText = `${res.summary.avgScore}%`;
-        document.getElementById('statPassRate').innerText = `${res.summary.passRate}%`;
+
+        // คำนวณอัตราการผ่านจากคะแนนที่แสดงจริงในตาราง
+        // เพื่อให้ Dashboard และผลรายบุคคลใช้เกณฑ์เดียวกัน
+        const logs = Array.isArray(res.studentLogs) ? res.studentLogs : [];
+        const passCount = logs.filter(l => getPassStatus(l) === 'PASS').length;
+        const clientPassRate = logs.length > 0
+          ? ((passCount / logs.length) * 100).toFixed(1)
+          : '0.0';
+        document.getElementById('statPassRate').innerText = `${clientPassRate}%`;
 
         // Render ผลการสอบ
         const logTable = document.getElementById('adminLogsTable');
-        logTable.innerHTML = res.studentLogs.map((l, index) => {
-          const isPass = String(l.pass_status).toUpperCase() === 'PASS';
+        logTable.innerHTML = logs.map((l, index) => {
+          const isPass = getPassStatus(l) === 'PASS';
           
           const statusBadge = isPass 
             ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
