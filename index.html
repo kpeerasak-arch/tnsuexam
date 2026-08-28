@@ -26,7 +26,7 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
       <div class="flex items-center space-x-3">
         <span class="text-2xl font-bold tracking-wider">PE-EXAM</span>
-        <span class="text-xs bg-indigo-700 px-2 py-1 rounded text-indigo-200">TNSU Testing v 4 By Dr.pkkp TNSUMK</span>
+        <span class="text-xs bg-indigo-700 px-2 py-1 rounded text-indigo-200">Testing System v.4 By Dr.pkkp TNSUMK</span>
       </div>
       <div id="navUser" class="hidden flex items-center space-x-4">
         <span id="userNameDisplay" class="font-medium text-sm"></span>
@@ -612,10 +612,10 @@
         document.getElementById('statAvgScore').innerText = `${res.summary.avgScore}%`;
         document.getElementById('statPassRate').innerText = `${res.summary.passRate}%`;
 
+        // Render ผลการสอบ
         const logTable = document.getElementById('adminLogsTable');
         logTable.innerHTML = res.studentLogs.map((l, index) => {
-          const statusStr = String(l.pass_status || '').trim().toUpperCase();
-          const isPass = statusStr === 'PASS';
+          const isPass = String(l.pass_status).toUpperCase() === 'PASS';
           
           const statusBadge = isPass 
             ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -651,19 +651,39 @@
           `;
         }).join('');
 
+        // -----------------------------------------------------------------------------
+        // Render ตารางผู้ใช้งาน พร้อมปุ่มเปลี่ยนสถานะ (Approved ↔ Pending)
+        // -----------------------------------------------------------------------------
         const userTable = document.getElementById('adminUserTable');
-        userTable.innerHTML = res.users.map(u => `
-          <tr class="border-b hover:bg-slate-50">
-            <td class="p-3">${u.user_id}</td>
-            <td class="p-3">${u.fullname}</td>
-            <td class="p-3">${u.email}</td>
-            <td class="p-3">${u.role}</td>
-            <td class="p-3"><span class="px-2 py-1 rounded-full text-xs ${u.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${u.status}</span></td>
-            <td class="p-3">
-              ${u.status === 'Pending' ? `<button onclick="approveUser('${u.user_id}', 'Approved')" class="bg-indigo-600 text-white text-xs px-2.5 py-1 rounded hover:bg-indigo-700">อนุมัติ</button>` : '-'}
-            </td>
-          </tr>
-        `).join('');
+        userTable.innerHTML = res.users.map(u => {
+          const isApproved = String(u.status).trim() === 'Approved';
+          const isAdmin = String(u.role).trim() === 'Admin';
+          
+          const statusBadge = isApproved
+            ? `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Approved</span>`
+            : `<span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Pending</span>`;
+
+          // ปุ่มสำหรับสลับสถานะ (ถ้าเป็น Admin ไม่อนุญาตให้เปลี่ยนสิทธิ์ตัวเอง)
+          let actionBtn = '-';
+          if (!isAdmin) {
+            if (isApproved) {
+              actionBtn = `<button onclick="approveUser('${u.user_id}', 'Pending')" class="bg-amber-500 text-white text-xs px-2.5 py-1 rounded hover:bg-amber-600 transition">ยกเลิกอนุมัติ</button>`;
+            } else {
+              actionBtn = `<button onclick="approveUser('${u.user_id}', 'Approved')" class="bg-indigo-600 text-white text-xs px-2.5 py-1 rounded hover:bg-indigo-700 transition">อนุมัติ</button>`;
+            }
+          }
+
+          return `
+            <tr class="border-b hover:bg-slate-50">
+              <td class="p-3 font-medium text-slate-700">${u.user_id}</td>
+              <td class="p-3">${u.fullname}</td>
+              <td class="p-3 text-slate-600">${u.email}</td>
+              <td class="p-3">${u.role}</td>
+              <td class="p-3">${statusBadge}</td>
+              <td class="p-3">${actionBtn}</td>
+            </tr>
+          `;
+        }).join('');
       }
     }
 
@@ -722,10 +742,15 @@
     }
 
     async function approveUser(userId, status) {
-      const res = await apiCall('approveUser', { user_id: userId, status: status });
-      if (res.success) {
-        alert('อัปเดตสถานะสำเร็จ');
-        loadAdminDashboard();
+      const actionText = status === 'Approved' ? 'อนุมัติ' : 'ปรับเป็น Pending';
+      if (confirm(`คุณต้องการ ${actionText} ผู้ใช้งานนี้ใช่หรือไม่?`)) {
+        const res = await apiCall('approveUser', { user_id: userId, status: status });
+        if (res.success) {
+          alert('อัปเดตสถานะสำเร็จ');
+          loadAdminDashboard();
+        } else {
+          alert(res.message || 'เกิดข้อผิดพลาดในการอัปเดตสถานะ');
+        }
       }
     }
   </script>
